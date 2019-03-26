@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import struct
 import codecs
+import sys
 
 '''
 ClassFile {
@@ -130,6 +131,7 @@ CONSTANT_InvokeDynamic_info {
 
 '''
 
+global contains_slash_files, all_file_count, class_file_count, tags
 
 tags = {
         7: {'name': 'Class', 'size': 2},
@@ -148,20 +150,31 @@ tags = {
         18: {'name': 'InvokeDynamic', 'size': 4},
     }
 
+contains_slash_files = []
+all_file_count = 0
+class_file_count = 0
 
-def process_pools(f, pool_cnt):
+
+
+#import curses
+
+#window = curses.initscr()
+
+def process_pools(f, pool_cnt, f_name):
     
-    print 'pool count:' + str(pool_cnt)
+    #print 'pool count:' + str(pool_cnt)
     cur_pool = 1
     str_cnt = 0
     contain_slash_strs = []
     while cur_pool < pool_cnt :
+        #print 'cur:', cur_pool
         tag = f.read(1)
         tag = struct.unpack('B', tag)[0]
         #print 'tag ->' + str(tag)
         if tag == 1 :
             str_cnt += 1
             str_len = struct.unpack('>H', f.read(2))[0]
+            #print 'string length ->', str_len
             str_content = f.read(str_len)
             str_content = codecs.decode(str_content, 'utf-8')
             #print 'str_content ->' + str_content
@@ -170,15 +183,28 @@ def process_pools(f, pool_cnt):
                 contain_slash_strs.append(str_content)           
         else:
             f.read(tags[tag]['size'])
+            if tags[tag]['size'] == 8:
+                cur_pool += 1
+        
         cur_pool += 1
-
-    print '一共有常量字符串', str_cnt, '个'
-    print '包含"\\"的有如下：'
-    for s in contain_slash_strs:
-        print '\t', s
+    if len(contain_slash_strs) > 0:
+        #print '一共有常量字符串', str_cnt, '个'
+        #print '包含"\\"的有如下：'
+        #for s in contain_slash_strs:
+        #    print '\t', s
+        contains_slash_files.append({
+            'name': f_name,
+            'strs': contain_slash_strs
+            })
         
 def process_file(file_name):
     print '开始扫描文件：', file_name
+    #tmp_out = '开始扫描文件：' + file_name+'\r'
+    #sys.stdout.write('%s\r' % tmp_out)
+    #print tmp_out, 
+    ##sys.stdout.flush()
+    #window.addstr(0, 0, "Hello")
+    #window.refresh()
     with open(file_name, "rb") as f:
         magicHdr = f.read(4)
         magicHdr = struct.unpack('>I', magicHdr)[0]
@@ -186,13 +212,17 @@ def process_file(file_name):
         #print struct.unpack('>I', magicHdr)[0]
         #print 0xcafebabe
         if 0xcafebabe != magicHdr:
-            print '不是有效的Java ClassFile文件！'
+            #print '不是有效的Java ClassFile文件！'
+            return
         else:
+            global class_file_count
+            class_file_count += 1
+            #print '开始扫描文件：', file_name
             vers = f.read(4)
-            print 'version:' + str(struct.unpack('>2H', vers))
+            #print 'version:' + str(struct.unpack('>2H', vers))
             pool_cnt = f.read(2)
             pool_cnt = struct.unpack('>H', pool_cnt)[0]
-            process_pools(f, pool_cnt)
+            process_pools(f, pool_cnt, file_name)
             
                     
             f.close()
@@ -202,11 +232,36 @@ def process_file(file_name):
     #    # Do stuff with byte.
     #    byte = f.read(1)
 
-process_file("DepateNumCount.class")
+#process_file("com\\base\\dbtools\\FieldObject.class")
+#'''
+import os
+
+
+
+from os.path import join, getsize
 
 
 
 
+for root, dirs, files in os.walk('com'):
+    #print 'dir:', root
+    #print sum(getsize(join(root, name)) for name in files),
+    #print "bytes in", len(files), "non-directory files"
+    for f in files:
+        #print '\t', f
+        all_file_count += 1
+        process_file(root + "\\" + f)
+
+print '扫描完成。共扫描 ', str(all_file_count) , '个文件，其中 Java ClassFile' + str(class_file_count) + '个；'
+
+for item in contains_slash_files:
+
+    print 'path:', item['name']
+    print '包含"\\"的有如下：'
+    for s in item['strs']:
+            print '\t', s
+
+#'''
 
 
 
